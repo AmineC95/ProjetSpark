@@ -5,3 +5,5 @@
 /.vscode
 /target
 /project
+# trop volumineux 
+listings.csv
