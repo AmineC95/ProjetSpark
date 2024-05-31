@@ -7,7 +7,8 @@ object AirBnb {
     val spark = SparkSession.builder.getOrCreate()
 
     val df = spark.read.option("header", true).option("multiLine", true).option("escape", "\"").csv(pathRoute.split(";").mkString(","))
-//Room Types
+
+    // Room Types
     val total = df.count()
     val roomTypeCounts = df.groupBy("room_type").count()
     val roomTypePercentages = roomTypeCounts.withColumn("percentage", (roomTypeCounts("count") / total) * 100)
@@ -15,22 +16,22 @@ object AirBnb {
 
     sortedRoomTypePercentages.show()
 
-
-//Activity (à revoir) : number_of_review * min_night avg ntm /2
+    // Activity : average nights booked, price/night, average income
     val dfClean = df.withColumn("price", regexp_replace(col("price"), "\\$", "").cast("double"))
         .na.fill(0, Seq("price", "minimum_nights", "number_of_reviews"))
+    
     val dfWithEstimates = dfClean.withColumn("estimated_nights_booked", col("minimum_nights") * col("number_of_reviews"))
         .withColumn("estimated_income", col("price") * col("estimated_nights_booked"))
-    val averages = dfWithEstimates.agg(
+    
+    val activityMetrics = dfWithEstimates.agg(
         avg("estimated_nights_booked").alias("average_nights_booked"),
-        avg("price").alias("average_price_per_night"),
+        avg("price").alias("price_per_night"),
         avg("estimated_income").alias("average_income")
     )
 
-    averages.show()
+    activityMetrics.show()
 
-
-//Listings per Host
+    // Listings per Host
     val hostListingCount = df.groupBy("host_name").count()
     val singleListings = hostListingCount.filter(col("count") === 1).count()
     val multiListings = hostListingCount.filter(col("count") > 1).count()
@@ -41,7 +42,7 @@ object AirBnb {
     println(s"Single listings: $singleListings ($singleListingPercentage%)")
     println(s"Multi-listings: $multiListings ($multiListingPercentage%)")
 
-//Short-Term Rentals
+    // Short-Term Rentals
     val totalListings = df.count()
     val shortTermRentals = df.filter(col("minimum_nights") <= 30).count()
     val longTermRentals = df.filter(col("minimum_nights") > 30).count()
@@ -51,12 +52,10 @@ object AirBnb {
     println(s"Short-term rentals: $shortTermRentals ($shortTermPercentage%)")
     println(s"Long-term rentals: $longTermRentals ($longTermPercentage%)")
 
-
-//Top Hosts
+    // Top Hosts
     val roomTypeCount = df.groupBy("host_name", "room_type").count()
     val pivotDF = roomTypeCount.groupBy("host_name").pivot("room_type").sum("count")
-    val totalListingHosts = pivotDF.withColumn("Total Listings", col("Entire Home/Apt") + col("Private room") + col("Shared room") + col("Hotel room"))
+    val totalListingHosts = pivotDF.withColumn("Total Listings", col("Entire home/apt") + col("Private room") + col("Shared room") + col("Hotel room"))
 
-    totalListingHosts.orderBy(desc("Hotel room")).show()
-
+    totalListingHosts.orderBy(desc("Total Listings")).show()
 }
